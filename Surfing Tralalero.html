@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tralalero Surfing Game</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- 配置Tailwind自定义颜色 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#FF7D00',
+            accent: '#FF3D00',
+            dark: '#1E293B',
+            light: '#F8FAFC'
+          },
+        },
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .text-shadow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      }
+      .animate-float {
+        animation: float 3s ease-in-out infinite;
+      }
+      .animate-wave {
+        animation: wave 1.5s linear infinite;
+      }
+    }
+  </style>
+  
+  <style>
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-15px); }
+    }
+    
+    @keyframes wave {
+      0% { background-position: 0 0; }
+      100% { background-position: 200px 0; }
+    }
+    
+    body {
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    
+    #game-canvas {
+      display: block;
+      background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+    }
+    
+    .game-container {
+      position: relative;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    .game-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      z-index: 10;
+    }
+    
+    .control-btn {
+      position: absolute;
+      bottom: 20px;
+      width: 60px;
+      height: 60px;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      z-index: 5;
+      backdrop-filter: blur(4px);
+    }
+    
+    #left-btn {
+      left: 20px;
+    }
+    
+    #right-btn {
+      right: 20px;
+    }
+    
+    #jump-btn {
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    
+    /* 自定义滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #165DFF;
+      border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #0F46D0;
+    }
+    
+    /* 二连跳指示器 */
+    #jump-indicator {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 5px;
+      z-index: 5;
+    }
+    
+    .jump-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: rgba(255, 255, 255, 0.5);
+      transition: background-color 0.3s;
+    }
+    
+    .jump-dot.active {
+      background-color: white;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div class="game-container">
+    <canvas id="game-canvas"></canvas>
+    
+    <!-- 二连跳指示器 -->
+    <div id="jump-indicator">
+      <div class="jump-dot active"></div>
+      <div class="jump-dot active"></div>
+    </div>
+    
+    <!-- 游戏开始界面 -->
+    <div id="start-screen" class="game-overlay">
+      <h1 class="text-[clamp(2rem,5vw,3.5rem)] font-bold mb-6 text-shadow">Tralalero Surfing</h1>
+      <p class="text-[clamp(1rem,2vw,1.25rem)] mb-8 max-w-md text-center">帮助Tralalero在海浪中冲浪，躲避障碍物，收集金币！</p>
+      <button id="start-btn" class="px-8 py-3 bg-primary text-white rounded-full font-bold text-lg hover:bg-primary/90 transition-colors duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+        开始游戏
+      </button>
+    </div>
+    
+    <!-- 游戏结束界面 -->
+    <div id="game-over-screen" class="game-overlay hidden">
+      <h2 class="text-[clamp(1.5rem,4vw,2.5rem)] font-bold mb-2 text-shadow">游戏结束</h2>
+      <p class="text-[clamp(1rem,2vw,1.25rem)] mb-2">得分: <span id="final-score">0</span></p>
+      <p class="text-[clamp(1rem,2vw,1.25rem)] mb-6">最高记录: <span id="high-score">0</span></p>
+      <button id="restart-btn" class="px-6 py-2 bg-secondary text-white rounded-full font-bold hover:bg-secondary/90 transition-colors duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+        再玩一次
+      </button>
+    </div>
+    
+    <!-- 移动端控制按钮 -->
+    <div class="md:hidden">
+      <button id="left-btn" class="control-btn">
+        <i class="fa fa-arrow-left"></i>
+      </button>
+      <button id="right-btn" class="control-btn">
+        <i class="fa fa-arrow-right"></i>
+      </button>
+      <button id="jump-btn" class="control-btn">
+        <i class="fa fa-arrow-up"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 游戏说明 -->
+  <div class="container mx-auto px-4 py-6 bg-white shadow-md rounded-lg mt-4 max-w-4xl">
+    <h3 class="text-xl font-bold mb-4">游戏说明</h3>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h4 class="font-semibold mb-2">控制方式</h4>
+        <ul class="list-disc pl-5 space-y-1 text-gray-700">
+          <li>电脑: 方向键 ← → 或 A D 键控制左右移动，空格键或上箭头键跳跃</li>
+          <li>移动设备: 点击屏幕左右两侧控制移动，底部中间按钮跳跃</li>
+          <li>二连跳: 在空中可以再次按下跳跃键进行二次跳跃</li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="font-semibold mb-2">游戏目标</h4>
+        <ul class="list-disc pl-5 space-y-1 text-gray-700">
+          <li>帮助Tralalero在海浪中冲浪，尽可能长时间存活</li>
+          <li>躲避障碍物（岩石和海草）</li>
+          <li>收集金币以获得更高分数</li>
+          <li>随着时间推移，游戏速度会逐渐增加</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 游戏常量
+    const GAME_WIDTH = 800;
+    const GAME_HEIGHT = 500;
+    const PLAYER_WIDTH = 60;
+    const PLAYER_HEIGHT = 80;
+    const OBSTACLE_WIDTH = 50;
+    const OBSTACLE_HEIGHT = 50;
+    const COIN_WIDTH = 30;
+    const COIN_HEIGHT = 30;
+    const GRAVITY = 0.5;
+    const JUMP_POWER = -12;
+    const MOVEMENT_SPEED = 6;
+    const INITIAL_SCROLL_SPEED = 3;
+    const MAX_SCROLL_SPEED = 8;
+    const SPEED_INCREMENT = 0.005;
+    const GROUND_Y = GAME_HEIGHT - 50 - PLAYER_HEIGHT; // 地面高度
+    
+    // 游戏变量
+    let canvas, ctx;
+    let player = { 
+      x: 0, 
+      y: 0, 
+      width: PLAYER_WIDTH, 
+      height: PLAYER_HEIGHT, 
+      velocityX: 0, 
+      velocityY: 0, 
+      jumping: false,
+      jumpsLeft: 2 // 二连跳
+    };
+    let obstacles = [];
+    let coins = [];
+    let scrollSpeed = INITIAL_SCROLL_SPEED;
+    let score = 0;
+    let highScore = localStorage.getItem('tralaleroHighScore') || 0;
+    let gameRunning = false;
+    let animationId;
+    let lastTimestamp = 0;
+    let spawnTimer = 0;
+    let coinSpawnTimer = 0;
+    let jumpDots = [];
+    
+    // 游戏资源
+    let playerImage = new Image();
+    playerImage.src = 'https://picsum.photos/id/237/60/80'; // 使用示例图片，实际应替换为Tralalero图片
+    
+    let obstacleImage = new Image();
+    obstacleImage.src = 'https://picsum.photos/id/133/50/50'; // 岩石图片
+    
+    let coinImage = new Image();
+    coinImage.src = 'https://picsum.photos/id/225/30/30'; // 金币图片
+    
+    let backgroundImage = new Image();
+    backgroundImage.src = 'https://picsum.photos/id/1043/800/500'; // 背景图片
+    
+    // DOM元素
+    let startScreen, gameOverScreen, finalScoreElement, highScoreElement;
+    let startBtn, restartBtn, leftBtn, rightBtn, jumpBtn;
+    
+    // 初始化游戏
+    function init() {
+      canvas = document.getElementById('game-canvas');
+      ctx = canvas.getContext('2d');
+      
+      // 设置canvas尺寸
+      canvas.width = GAME_WIDTH;
+      canvas.height = GAME_HEIGHT;
+      
+      // 获取DOM元素
+      startScreen = document.getElementById('start-screen');
+      gameOverScreen = document.getElementById('game-over-screen');
+      finalScoreElement = document.getElementById('final-score');
+      highScoreElement = document.getElementById('high-score');
+      startBtn = document.getElementById('start-btn');
+      restartBtn = document.getElementById('restart-btn');
+      leftBtn = document.getElementById('left-btn');
+      rightBtn = document.getElementById('right-btn');
+      jumpBtn = document.getElementById('jump-btn');
+      
+      // 获取跳跃指示器
+      jumpDots = document.querySelectorAll('.jump-dot');
+      
+      // 更新最高分显示
+      highScoreElement.textContent = highScore;
+      
+      // 设置玩家初始位置
+      resetPlayer();
+      
+      // 事件监听
+      startBtn.addEventListener('click', startGame);
+      restartBtn.addEventListener('click', restartGame);
+      
+      // 键盘控制
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keyup', handleKeyUp);
+      
+      // 触摸控制
+      leftBtn.addEventListener('touchstart', () => { player.velocityX = -MOVEMENT_SPEED; });
+      leftBtn.addEventListener('touchend', () => { if (!isKeyPressed.ArrowRight && !isKeyPressed.KeyD) player.velocityX = 0; });
+      rightBtn.addEventListener('touchstart', () => { player.velocityX = MOVEMENT_SPEED; });
+      rightBtn.addEventListener('touchend', () => { if (!isKeyPressed.ArrowLeft && !isKeyPressed.KeyA) player.velocityX = 0; });
+      jumpBtn.addEventListener('touchstart', handleJump);
+      
+      // 鼠标点击控制（移动设备）
+      canvas.addEventListener('touchstart', (e) => {
+        if (!gameRunning) return;
+        
+        const touchX = e.touches[0].clientX;
+        const canvasRect = canvas.getBoundingClientRect();
+        const centerX = canvasRect.left + canvas.width / 2;
+        
+        if (touchX < centerX) {
+          player.velocityX = -MOVEMENT_SPEED;
+        } else {
+          player.velocityX = MOVEMENT_SPEED;
+        }
+      });
+      
+      canvas.addEventListener('touchend', (e) => {
+        if (!gameRunning) return;
+        
+        player.velocityX = 0;
+      });
+      
+      // 窗口调整大小
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+    }
+    
+    // 调整Canvas大小
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      const containerWidth = container.offsetWidth;
+      
+      // 保持宽高比
+      const scale = Math.min(containerWidth / GAME_WIDTH, 1);
+      canvas.style.width = `${GAME_WIDTH * scale}px`;
+      canvas.style.height = `${GAME_HEIGHT * scale}px`;
+    }
+    
+    // 重置玩家位置
+    function resetPlayer() {
+      player.x = GAME_WIDTH / 2 - player.width / 2;
+      player.y = GROUND_Y;
+      player.velocityX = 0;
+      player.velocityY = 0;
+      player.jumping = false;
+      player.jumpsLeft = 2; // 重置二连跳次数
+      updateJumpIndicator();
+    }
+    
+    // 开始游戏
+    function startGame() {
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      
+      resetPlayer();
+      obstacles = [];
+      coins = [];
+      score = 0;
+      scrollSpeed = INITIAL_SCROLL_SPEED;
+      gameRunning = true;
+      
+      lastTimestamp = performance.now();
+      gameLoop(lastTimestamp);
+    }
+    
+    // 重新开始游戏
+    function restartGame() {
+      cancelAnimationFrame(animationId);
+      startGame();
+    }
+    
+    // 游戏结束
+    function gameOver() {
+      gameRunning = false;
+      cancelAnimationFrame(animationId);
+      
+      // 更新最高分
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('tralaleroHighScore', highScore);
+        highScoreElement.textContent = highScore;
+      }
+      
+      // 显示游戏结束界面
+      finalScoreElement.textContent = score;
+      gameOverScreen.classList.remove('hidden');
+    }
+    
+    // 键盘状态
+    const isKeyPressed = {
+      ArrowLeft: false,
+      ArrowRight: false,
+      KeyA: false,
+      KeyD: false,
+      Space: false,
+      ArrowUp: false
+    };
+    
+    // 处理按键按下
+    function handleKeyDown(e) {
+      if (!gameRunning) return;
+      
+      switch (e.code) {
+        case 'ArrowLeft':
+        case 'KeyA':
+          isKeyPressed[e.code] = true;
+          player.velocityX = -MOVEMENT_SPEED;
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          isKeyPressed[e.code] = true;
+          player.velocityX = MOVEMENT_SPEED;
+          break;
+        case 'Space':
+        case 'ArrowUp':
+          if (!isKeyPressed[e.code]) {
+            handleJump();
+          }
+          isKeyPressed[e.code] = true;
+          break;
+      }
+    }
+    
+    // 处理按键释放
+    function handleKeyUp(e) {
+      switch (e.code) {
+        case 'ArrowLeft':
+        case 'KeyA':
+          isKeyPressed[e.code] = false;
+          if (!isKeyPressed.ArrowRight && !isKeyPressed.KeyD) {
+            player.velocityX = 0;
+          }
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          isKeyPressed[e.code] = false;
+          if (!isKeyPressed.ArrowLeft && !isKeyPressed.KeyA) {
+            player.velocityX = 0;
+          }
+          break;
+        case 'Space':
+        case 'ArrowUp':
+          isKeyPressed[e.code] = false;
+          break;
+      }
+    }
+    
+    // 更新跳跃指示器
+    function updateJumpIndicator() {
+      jumpDots.forEach((dot, index) => {
+        if (index < player.jumpsLeft) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+    }
+    
+    // 处理跳跃
+    function handleJump() {
+      // 检查是否还有跳跃次数
+      if (player.jumpsLeft > 0) {
+        player.jumping = true;
+        player.velocityY = JUMP_POWER;
+        player.jumpsLeft--;
+        updateJumpIndicator();
+      }
+    }
+    
+    // 生成障碍物
+    function spawnObstacle() {
+      const obstacleTypes = ['rock', 'seaweed'];
+      const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+      const x = GAME_WIDTH;
+      const y = GAME_HEIGHT - OBSTACLE_HEIGHT - 50; // 50是地面高度
+      
+      obstacles.push({
+        x,
+        y,
+        width: OBSTACLE_WIDTH,
+        height: OBSTACLE_HEIGHT,
+        type
+      });
+    }
+    
+    // 生成金币
+    function spawnCoin() {
+      const x = GAME_WIDTH + Math.random() * 200;
+      const y = GAME_HEIGHT - 150 - Math.random() * 200; // 在半空中随机位置
+      
+      coins.push({
+        x,
+        y,
+        width: COIN_WIDTH,
+        height: COIN_HEIGHT,
+        collected: false,
+        animationFrame: 0
+      });
+    }
+    
+    // 检测碰撞
+    function checkCollision(rect1, rect2) {
+      return (
+        rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y
+      );
+    }
+    
+    // 更新游戏状态
+    function update(deltaTime) {
+      // 增加分数
+      score += deltaTime * 0.01;
+      
+      // 增加游戏速度
+      scrollSpeed = Math.min(scrollSpeed + SPEED_INCREMENT * deltaTime, MAX_SCROLL_SPEED);
+      
+      // 应用重力
+      player.velocityY += GRAVITY;
+      player.y += player.velocityY;
+      
+      // 地面检测
+      if (player.y >= GROUND_Y) {
+        player.y = GROUND_Y;
+        player.velocityY = 0;
+        player.jumping = false;
+        player.jumpsLeft = 2; // 重置跳跃次数
+        updateJumpIndicator();
+      }
+      
+      // 更新玩家位置
+      player.x += player.velocityX;
+      
+      // 边界检查
+      if (player.x < 0) player.x = 0;
+      if (player.x > GAME_WIDTH - player.width) player.x = GAME_WIDTH - player.width;
+      
+      // 更新障碍物位置
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].x -= scrollSpeed;
+        
+        // 移除离开屏幕的障碍物
+        if (obstacles[i].x + obstacles[i].width < 0) {
+          obstacles.splice(i, 1);
+        } else {
+          // 检测玩家与障碍物的碰撞
+          if (checkCollision(player, obstacles[i])) {
+            gameOver();
+            return;
+          }
+        }
+      }
+      
+      // 更新金币位置
+      for (let i = coins.length - 1; i >= 0; i--) {
+        if (coins[i].collected) continue;
+        
+        coins[i].x -= scrollSpeed;
+        coins[i].animationFrame += 0.1;
+        
+        // 移除离开屏幕的金币
+        if (coins[i].x + coins[i].width < 0) {
+          coins.splice(i, 1);
+        } else {
+          // 检测玩家与金币的碰撞
+          if (checkCollision(player, coins[i])) {
+            coins[i].collected = true;
+            score += 10;
+          }
+        }
+      }
+      
+      // 控制障碍物生成
+      spawnTimer += deltaTime;
+      if (spawnTimer > 1500 / (scrollSpeed / INITIAL_SCROLL_SPEED)) {
+        spawnObstacle();
+        spawnTimer = 0;
+      }
+      
+      // 控制金币生成
+      coinSpawnTimer += deltaTime;
+      if (coinSpawnTimer > 3000 / (scrollSpeed / INITIAL_SCROLL_SPEED)) {
+        spawnCoin();
+        coinSpawnTimer = 0;
+      }
+    }
+    
+    // 渲染游戏
+    function render() {
+      // 清空画布
+      ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      
+      // 绘制背景
+      ctx.drawImage(backgroundImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+      
+      // 绘制海平面
+      ctx.fillStyle = '#165DFF';
+      ctx.fillRect(0, GAME_HEIGHT - 50, GAME_WIDTH, 50);
+      
+      // 绘制海浪
+      ctx.fillStyle = '#3B82F6';
+      for (let i = 0; i < GAME_WIDTH; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, GAME_HEIGHT - 50);
+        ctx.bezierCurveTo(
+          i + 10, GAME_HEIGHT - 60,
+          i + 30, GAME_HEIGHT - 40,
+          i + 40, GAME_HEIGHT - 50
+        );
+        ctx.lineTo(i + 40, GAME_HEIGHT - 40);
+        ctx.bezierCurveTo(
+          i + 30, GAME_HEIGHT - 30,
+          i + 10, GAME_HEIGHT - 50,
+          i, GAME_HEIGHT - 40
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+      
+      // 绘制障碍物
+      obstacles.forEach(obstacle => {
+        ctx.drawImage(obstacleImage, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      });
+      
+      // 绘制金币
+      coins.forEach(coin => {
+        if (coin.collected) return;
+        
+        // 金币闪烁效果
+        const scale = 1 + 0.1 * Math.sin(coin.animationFrame);
+        const offsetX = (coin.width * scale - coin.width) / 2;
+        const offsetY = (coin.height * scale - coin.height) / 2;
+        
+        ctx.save();
+        ctx.translate(coin.x + coin.width/2, coin.y + coin.height/2);
+        ctx.scale(scale, scale);
+        ctx.translate(-coin.x - coin.width/2, -coin.y - coin.height/2);
+        ctx.drawImage(coinImage, coin.x - offsetX, coin.y - offsetY, coin.width * scale, coin.height * scale);
+        ctx.restore();
+      });
+      
+      // 绘制玩家
+      ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+      
+      // 绘制分数
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`得分: ${Math.floor(score)}`, 20, 40);
+      
+      // 绘制最高分
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(`最高分: ${highScore}`, GAME_WIDTH - 20, 40);
+      
+      // 绘制速度
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(`速度: ${scrollSpeed.toFixed(1)}x`, GAME_WIDTH - 20, 70);
+    }
+    
+    // 游戏主循环
+    function gameLoop(timestamp) {
+      if (!gameRunning) return;
+      
+      const deltaTime = timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
+      
+      update(deltaTime);
+      render();
+      
+      animationId = requestAnimationFrame(gameLoop);
+    }
+    
+    // 初始化游戏
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>  
